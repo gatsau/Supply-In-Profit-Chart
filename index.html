@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTC Supply in Profit/Loss</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-tertiary: #1a1a25;
+            --text-primary: #e8e8f0;
+            --text-secondary: #8888a0;
+            --text-muted: #55556a;
+            --btc-blue: #3b82f6;
+            --btc-blue-glow: rgba(59, 130, 246, 0.4);
+            --profit-green: #22c55e;
+            --loss-red: #ef4444;
+            --grid-line: rgba(255, 255, 255, 0.04);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Instrument Sans', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 40px 60px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 40px;
+            padding-bottom: 30px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .title-block {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .title .btc-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #f7931a, #ffab40);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 18px;
+            color: #fff;
+            box-shadow: 0 0 20px rgba(247, 147, 26, 0.4);
+        }
+
+        .subtitle {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .stats-row {
+            display: flex;
+            gap: 40px;
+        }
+
+        .stat-item {
+            text-align: right;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .stat-value.price { color: var(--btc-blue); }
+        .stat-value.profit { color: var(--profit-green); }
+        .stat-value.loss { color: var(--loss-red); }
+
+        .chart-wrapper {
+            position: relative;
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 30px;
+            border: 1px solid var(--border-subtle);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3), 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .legend {
+            display: flex;
+            gap: 30px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .legend-line {
+            width: 24px;
+            height: 3px;
+            border-radius: 2px;
+        }
+
+        .legend-line.price {
+            background: var(--btc-blue);
+            box-shadow: 0 0 8px var(--btc-blue-glow);
+        }
+
+        .legend-line.profit {
+            background: var(--profit-green);
+        }
+
+        .legend-line.loss {
+            background: var(--loss-red);
+        }
+
+        .time-range {
+            display: flex;
+            gap: 8px;
+        }
+
+        .time-btn {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            padding: 6px 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .time-btn:hover {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .time-btn.active {
+            background: var(--btc-blue);
+            color: white;
+            border-color: var(--btc-blue);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 600px;
+        }
+
+        .y-axis-label {
+            position: absolute;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 500;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            transform: rotate(180deg);
+        }
+
+        .y-axis-label.left {
+            left: -45px;
+            top: 50%;
+            transform: rotate(180deg) translateY(50%);
+            color: var(--btc-blue);
+        }
+
+        .y-axis-label.right {
+            right: -50px;
+            top: 50%;
+            transform: rotate(180deg) translateY(50%);
+            color: var(--text-secondary);
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--bg-tertiary);
+            border-top-color: var(--btc-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .chart-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .data-source {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .data-source a {
+            color: var(--btc-blue);
+            text-decoration: none;
+        }
+
+        .last-updated {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .live-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--profit-green);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .info-panel {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .info-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .info-card-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .info-card-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .info-card-detail {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        @media (max-width: 1200px) {
+            .container { padding: 30px; }
+            .info-panel { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 768px) {
+            .container { padding: 20px; }
+            .header { flex-direction: column; gap: 20px; }
+            .stats-row { flex-wrap: wrap; gap: 20px; }
+            .stat-item { text-align: left; }
+            .chart-header { flex-direction: column; gap: 16px; }
+            .legend { flex-wrap: wrap; gap: 16px; }
+            .info-panel { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="title-block">
+                <h1 class="title">
+                    <span class="btc-icon">₿</span>
+                    Supply in Profit / Loss
+                </h1>
+                <p class="subtitle">Real on-chain data | Price from 2009 | Supply metrics from Jan 2013</p>
+            </div>
+            <div class="stats-row">
+                <div class="stat-item">
+                    <div class="stat-label">Current Price</div>
+                    <div class="stat-value price" id="currentPrice">--</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Supply in Profit</div>
+                    <div class="stat-value profit" id="currentProfit">--</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Supply in Loss</div>
+                    <div class="stat-value loss" id="currentLoss">--</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="chart-wrapper">
+            <div class="chart-header">
+                <div class="legend">
+                    <div class="legend-item">
+                        <span class="legend-line price"></span>
+                        <span>BTC Price (USD)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-line profit"></span>
+                        <span>Supply in Profit</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-line loss"></span>
+                        <span>Supply in Loss</span>
+                    </div>
+                </div>
+                <div class="time-range">
+                    <button class="time-btn" data-range="1Y">1Y</button>
+                    <button class="time-btn" data-range="3Y">3Y</button>
+                    <button class="time-btn" data-range="5Y">5Y</button>
+                    <button class="time-btn active" data-range="ALL">ALL</button>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <span class="y-axis-label left">BTC PRICE (USD)</span>
+                <span class="y-axis-label right">% OF SUPPLY</span>
+                <div class="loading" id="loading">
+                    <div class="loading-spinner"></div>
+                    <span class="loading-text">Loading data...</span>
+                </div>
+                <canvas id="btcChart"></canvas>
+            </div>
+
+            <div class="chart-footer">
+                <span class="data-source">Data: <a href="https://charts.checkonchain.com" target="_blank">CheckOnChain</a> (on-chain) + <a href="https://cryptocompare.com" target="_blank">CryptoCompare</a> (price)</span>
+                <span class="last-updated">
+                    <span class="live-dot"></span>
+                    Last updated: <span id="lastUpdated">--</span>
+                </span>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <div class="info-card">
+                <div class="info-card-title">All-Time High</div>
+                <div class="info-card-value" id="athValue">--</div>
+                <div class="info-card-detail" id="athDate">--</div>
+            </div>
+            <div class="info-card">
+                <div class="info-card-title">All-Time Low</div>
+                <div class="info-card-value" id="atlValue">--</div>
+                <div class="info-card-detail" id="atlDate">--</div>
+            </div>
+            <div class="info-card">
+                <div class="info-card-title">Avg. Supply in Profit</div>
+                <div class="info-card-value" id="avgProfit" style="color: var(--profit-green);">--</div>
+                <div class="info-card-detail">Historical average</div>
+            </div>
+            <div class="info-card">
+                <div class="info-card-title">Market Cycle Phase</div>
+                <div class="info-card-value" id="cyclePhase">--</div>
+                <div class="info-card-detail" id="cycleDetail">Based on supply metrics</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let btcChart = null;
+        let fullData = null;
+
+        const formatPrice = (price) => {
+            if (price >= 1000) {
+                return '$' + price.toLocaleString('en-US', { maximumFractionDigits: 0 });
+            } else if (price >= 1) {
+                return '$' + price.toFixed(2);
+            } else {
+                return '$' + price.toFixed(4);
+            }
+        };
+
+        const formatPercent = (value) => value.toFixed(1) + '%';
+
+        async function loadData() {
+            const loading = document.getElementById('loading');
+            loading.style.display = 'flex';
+
+            try {
+                const response = await fetch('./btc_supply_data.json');
+                fullData = await response.json();
+
+                console.log(`Loaded ${fullData.length} data points`);
+
+                updateCurrentStats();
+                updateInfoCards();
+                createChart(fullData);
+
+                document.getElementById('lastUpdated').textContent =
+                    fullData[fullData.length - 1].date;
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('loading').innerHTML = '<span class="loading-text">Error loading data.</span>';
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        function updateCurrentStats() {
+            if (!fullData || fullData.length === 0) return;
+
+            let latest = fullData[fullData.length - 1];
+            for (let i = fullData.length - 1; i >= 0; i--) {
+                if (fullData[i].pct_profit !== null) {
+                    latest = fullData[i];
+                    break;
+                }
+            }
+
+            document.getElementById('currentPrice').textContent = formatPrice(latest.price);
+            if (latest.pct_profit !== null) {
+                document.getElementById('currentProfit').textContent = formatPercent(latest.pct_profit);
+                document.getElementById('currentLoss').textContent = formatPercent(latest.pct_loss);
+            }
+        }
+
+        function updateInfoCards() {
+            if (!fullData || fullData.length === 0) return;
+
+            const ath = fullData.reduce((max, d) => d.price > max.price ? d : max, fullData[0]);
+            document.getElementById('athValue').textContent = formatPrice(ath.price);
+            document.getElementById('athDate').textContent = ath.date;
+
+            const atl = fullData.reduce((min, d) => d.price < min.price ? d : min, fullData[0]);
+            document.getElementById('atlValue').textContent = formatPrice(atl.price);
+            document.getElementById('atlDate').textContent = atl.date;
+
+            const withSupply = fullData.filter(d => d.pct_profit !== null);
+            const avgProfit = withSupply.reduce((sum, d) => sum + d.pct_profit, 0) / withSupply.length;
+            document.getElementById('avgProfit').textContent = formatPercent(avgProfit);
+
+            let latest = fullData[fullData.length - 1];
+            for (let i = fullData.length - 1; i >= 0; i--) {
+                if (fullData[i].pct_profit !== null) {
+                    latest = fullData[i];
+                    break;
+                }
+            }
+
+            let phase, detail;
+            if (latest.pct_profit > 90) {
+                phase = 'Euphoria';
+                detail = 'Extreme profit levels';
+            } else if (latest.pct_profit > 75) {
+                phase = 'Bull Market';
+                detail = 'Strong uptrend';
+            } else if (latest.pct_profit > 50) {
+                phase = 'Recovery';
+                detail = 'Market rebuilding';
+            } else if (latest.pct_profit > 30) {
+                phase = 'Accumulation';
+                detail = 'Smart money buying';
+            } else {
+                phase = 'Capitulation';
+                detail = 'Maximum fear';
+            }
+            document.getElementById('cyclePhase').textContent = phase;
+            document.getElementById('cycleDetail').textContent = detail;
+        }
+
+        function createChart(data) {
+            const ctx = document.getElementById('btcChart').getContext('2d');
+
+            if (btcChart) {
+                btcChart.destroy();
+            }
+
+            const labels = data.map(d => new Date(d.date));
+            const priceData = data.map(d => d.price);
+
+            // Both profit and loss on same 0-100% axis
+            // When profit = 90, loss = 10 (they're inverses)
+            // When profit = 50, loss = 50 (lines touch)
+            const profitData = data.map(d => d.pct_profit);
+            const lossData = data.map(d => d.pct_loss);
+
+            // Custom plugin to draw 50% line where profit and loss meet
+            const midlinePlugin = {
+                id: 'midline',
+                afterDraw: (chart) => {
+                    const ctx = chart.ctx;
+                    const yAxis = chart.scales.y1;
+                    const xAxis = chart.scales.x;
+
+                    if (!yAxis) return;
+
+                    const y50 = yAxis.getPixelForValue(50);
+
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.setLineDash([5, 5]);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                    ctx.lineWidth = 1;
+                    ctx.moveTo(xAxis.left, y50);
+                    ctx.lineTo(xAxis.right, y50);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            };
+
+            btcChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'BTC Price',
+                            data: priceData,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.1,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            yAxisID: 'y',
+                            order: 1
+                        },
+                        {
+                            label: 'Supply in Profit',
+                            data: profitData,
+                            borderColor: '#22c55e',
+                            backgroundColor: 'transparent',
+                            borderWidth: 1.5,
+                            fill: false,
+                            tension: 0.2,
+                            pointRadius: 0,
+                            pointHoverRadius: 3,
+                            yAxisID: 'y1',
+                            order: 2,
+                            spanGaps: true
+                        },
+                        {
+                            label: 'Supply in Loss',
+                            data: lossData,
+                            borderColor: '#ef4444',
+                            backgroundColor: 'transparent',
+                            borderWidth: 1.5,
+                            fill: false,
+                            tension: 0.2,
+                            pointRadius: 0,
+                            pointHoverRadius: 3,
+                            yAxisID: 'y1',
+                            order: 3,
+                            spanGaps: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: '#0a0a0f',
+                            titleColor: '#e8e8f0',
+                            bodyColor: '#8888a0',
+                            borderColor: 'rgba(255, 255, 255, 0.08)',
+                            borderWidth: 1,
+                            padding: 12,
+                            displayColors: true,
+                            callbacks: {
+                                title: function(tooltipItems) {
+                                    const date = new Date(tooltipItems[0].label);
+                                    return date.toLocaleDateString('en-US', {
+                                        month: 'long',
+                                        day: 'numeric',
+                                        year: 'numeric'
+                                    });
+                                },
+                                label: function(context) {
+                                    if (context.datasetIndex === 0) {
+                                        return ' Price: ' + formatPrice(context.raw);
+                                    } else if (context.datasetIndex === 1) {
+                                        if (context.raw === null) return null;
+                                        return ' In Profit: ' + formatPercent(context.raw);
+                                    } else {
+                                        if (context.raw === null) return null;
+                                        return ' In Loss: ' + formatPercent(context.raw);
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'year',
+                                displayFormats: {
+                                    year: 'yyyy'
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.04)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#55556a',
+                                font: {
+                                    family: "'JetBrains Mono', monospace",
+                                    size: 11
+                                }
+                            }
+                        },
+                        y: {
+                            type: 'logarithmic',
+                            position: 'left',
+                            min: 0.01,
+                            max: 200000,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.04)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#3b82f6',
+                                font: {
+                                    family: "'JetBrains Mono', monospace",
+                                    size: 10
+                                },
+                                callback: function(value) {
+                                    const logTicks = [0.01, 0.1, 1, 10, 100, 1000, 10000, 100000, 200000];
+                                    if (logTicks.includes(value)) {
+                                        if (value >= 1000) return '$' + (value/1000) + 'k';
+                                        if (value >= 1) return '$' + value;
+                                        return '$' + value;
+                                    }
+                                    return '';
+                                }
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            position: 'right',
+                            min: 0,
+                            max: 100,
+                            grid: {
+                                drawOnChartArea: false
+                            },
+                            ticks: {
+                                color: '#8888a0',
+                                font: {
+                                    family: "'JetBrains Mono', monospace",
+                                    size: 10
+                                },
+                                stepSize: 10,
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    }
+                },
+                plugins: [midlinePlugin]
+            });
+        }
+
+        function filterByRange(range) {
+            if (!fullData) return;
+
+            const now = new Date();
+            let startDate;
+
+            switch(range) {
+                case '1Y':
+                    startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+                    break;
+                case '3Y':
+                    startDate = new Date(now.getFullYear() - 3, now.getMonth(), now.getDate());
+                    break;
+                case '5Y':
+                    startDate = new Date(now.getFullYear() - 5, now.getMonth(), now.getDate());
+                    break;
+                case 'ALL':
+                default:
+                    startDate = new Date('2009-01-01');
+            }
+
+            const filteredData = fullData.filter(d => new Date(d.date) >= startDate);
+            createChart(filteredData);
+        }
+
+        document.querySelectorAll('.time-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                filterByRange(this.dataset.range);
+            });
+        });
+
+        loadData();
+    </script>
+</body>
+</html>
