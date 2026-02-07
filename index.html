@@ -662,7 +662,8 @@
                             displayColors: true,
                             callbacks: {
                                 title: function(tooltipItems) {
-                                    const date = new Date(tooltipItems[0].label);
+                                    const timestamp = tooltipItems[0].parsed.x;
+                                    const date = new Date(timestamp);
                                     return date.toLocaleDateString('en-US', {
                                         month: 'long',
                                         day: 'numeric',
