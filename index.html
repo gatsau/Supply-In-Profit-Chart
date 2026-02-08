@@ -443,9 +443,9 @@
                 <div class="info-card-detail">Historical average</div>
             </div>
             <div class="info-card">
-                <div class="info-card-title">Market Cycle Phase</div>
-                <div class="info-card-value" id="cyclePhase">--</div>
-                <div class="info-card-detail" id="cycleDetail">Based on supply metrics</div>
+                <div class="info-card-title">Signal</div>
+                <div class="info-card-value" id="signalValue">--</div>
+                <div class="info-card-detail" id="signalDetail">Based on historical correlation</div>
             </div>
         </div>
     </div>
@@ -566,25 +566,33 @@
                 }
             }
 
-            let phase, detail;
-            if (latest.pct_profit > 90) {
-                phase = 'Euphoria';
-                detail = 'Extreme profit levels';
-            } else if (latest.pct_profit > 75) {
-                phase = 'Bull Market';
-                detail = 'Strong uptrend';
-            } else if (latest.pct_profit > 50) {
-                phase = 'Recovery';
-                detail = 'Market rebuilding';
-            } else if (latest.pct_profit > 30) {
-                phase = 'Accumulation';
-                detail = 'Smart money buying';
+            // Buy/Sell signal based on historical correlation
+            // Historically: >95% profit often precedes corrections, <50% often precedes rallies
+            let signal, detail, color;
+            if (latest.pct_profit >= 95) {
+                signal = 'SELL';
+                detail = 'Extreme greed - tops historically near';
+                color = '#ef4444';
+            } else if (latest.pct_profit >= 85) {
+                signal = 'TAKE PROFIT';
+                detail = 'Elevated levels - consider reducing';
+                color = '#f97316';
+            } else if (latest.pct_profit >= 65) {
+                signal = 'HOLD';
+                detail = 'Healthy market conditions';
+                color = '#8888a0';
+            } else if (latest.pct_profit >= 50) {
+                signal = 'ACCUMULATE';
+                detail = 'Historically favorable entry zone';
+                color = '#22c55e';
             } else {
-                phase = 'Capitulation';
-                detail = 'Maximum fear';
+                signal = 'BUY';
+                detail = 'Extreme fear - bottoms historically near';
+                color = '#10b981';
             }
-            document.getElementById('cyclePhase').textContent = phase;
-            document.getElementById('cycleDetail').textContent = detail;
+            document.getElementById('signalValue').textContent = signal;
+            document.getElementById('signalValue').style.color = color;
+            document.getElementById('signalDetail').textContent = detail;
         }
 
         function createChart(data) {
