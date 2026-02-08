@@ -466,22 +466,56 @@
 
         const formatPercent = (value) => value.toFixed(1) + '%';
 
+        async function fetchLivePrice() {
+            try {
+                const response = await fetch('https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD');
+                const data = await response.json();
+                return data.USD;
+            } catch (error) {
+                console.error('Error fetching live price:', error);
+                return null;
+            }
+        }
+
         async function loadData() {
             const loading = document.getElementById('loading');
             loading.style.display = 'flex';
 
             try {
+                // Load historical data
                 const response = await fetch('./btc_supply_data.json');
                 fullData = await response.json();
 
                 console.log(`Loaded ${fullData.length} data points`);
 
+                // Fetch live price and update the latest entry
+                const livePrice = await fetchLivePrice();
+                if (livePrice) {
+                    const today = new Date().toISOString().split('T')[0];
+                    const lastEntry = fullData[fullData.length - 1];
+
+                    // Update last entry or add new one for today
+                    if (lastEntry.date === today) {
+                        lastEntry.price = livePrice;
+                    } else {
+                        // Add today's entry with live price (supply data from previous day)
+                        fullData.push({
+                            date: today,
+                            price: livePrice,
+                            pct_profit: lastEntry.pct_profit,
+                            pct_loss: lastEntry.pct_loss
+                        });
+                    }
+                    console.log(`Live price: $${livePrice.toLocaleString()}`);
+                }
+
                 updateCurrentStats();
                 updateInfoCards();
                 createChart(fullData);
 
+                const now = new Date();
                 document.getElementById('lastUpdated').textContent =
-                    fullData[fullData.length - 1].date;
+                    now.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
             } catch (error) {
                 console.error('Error loading data:', error);
@@ -790,7 +824,21 @@
             });
         });
 
+        // Auto-refresh price every 60 seconds
+        async function refreshPrice() {
+            const livePrice = await fetchLivePrice();
+            if (livePrice && fullData && fullData.length > 0) {
+                fullData[fullData.length - 1].price = livePrice;
+                updateCurrentStats();
+
+                const now = new Date();
+                document.getElementById('lastUpdated').textContent =
+                    now.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            }
+        }
+
         loadData();
+        setInterval(refreshPrice, 60000); // Refresh every 60 seconds
     </script>
 </body>
 </html>
